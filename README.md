@@ -1,43 +1,17 @@
-# 📃 **关于 py-doc-qa-deepseek-server**
-
-基于  [🦜️🔗 LangChain](https://github.com/hwchase17/langchain) 与  DeepSeek R1 大语言模型的本地知识库问答。
-
-本项目是本地知识库问答应用的 serve 后端。目前实现基本的 RAG 功能。  
-后续会系统学习 langchain ，逐步添加更多的功能。
-
-项目使用 [FastAPI](https://fastapi.tiangolo.com/zh/tutorial/sql-databases/) + [Uvicorn](https://www.uvicorn.org/) + [SQLModel](https://sqlmodel.fastapi.org.cn/) + SQLite 框架。 向量数据库使用 [Chroma](https://docs.trychroma.com/docs/overview/introduction) 。
-
-> 为了直观的体现API交互，可搭配下面的 vue 前端框架结合使用。
->
-> vue 前端 **vue-doc-qa-chat** 链接：<https://github.com/YuiGod/vue-doc-qa-chat>
-
-## 系列文章
-
-1.  [《从零开始DeepSeek R1搭建本地知识库问答系统》一：利用WSL2搭建Linux子系统并设置运行环境前言](https://juejin.cn/post/7470334881735196684)
-2.  [《从零开始DeepSeek R1搭建本地知识库问答系统》二：Ollama 部署 DeepSeek R1 蒸馏模型及Api测试](https://juejin.cn/post/7470345587309854774)
-3.  [《从零开始DeepSeek R1搭建本地知识库问答系统》三：基于LangChain构建本地知识库问答RAG应用](https://juejin.cn/post/7470807715898212406)
-4.  [《从零开始DeepSeek R1搭建本地知识库问答系统》四：FastApi 框架搭建本地知识库问答Web Server端](https://juejin.cn/post/7478991058870747170)
-5.  [《从零开始DeepSeek R1搭建本地知识库问答系统》五：实现问答系统前端 UI 框架，基于 vue3 + typescript + ElementPlus](https://juejin.cn/post/7480009518175567907)
-
-## 项目使用前提
-
-**确保已经安装 Ollama，并部署 `deepseek-r1:7b` 大语言模型**，具体操作可以观看系列文章第一章和第二章。\
-也可以根据自己电脑配置更换模型。在项目地址 `app/core/base.py` 下指定模型名称。
+# Summer Project Backend
 
 ## 快速上手
 
 ```shell
-# 打开 ubuntu 终端，切换 r1 环境
-conda activate r1
-
-# 打开目录
-cd Project
+# 使用python虚拟环境
+$ python -m venv .venv
+$ .venv\Scripts\activate
 
 # 拉取项目
-$ git clone https://github.com/YuiGod/py-doc-qa-deepseek-server.git
+$ git clone https://github.com/Flora-Alex/summer_proj_backend.git
 
 # 进去项目
-$ cd py-doc-qa-deepseek-server
+$ cd summer_proj_backend
 
 # 安装项目相关依赖
 pip install -r requirements.txt
@@ -48,25 +22,6 @@ cd app
 # 启动服务
 python main.py
 ```
-
-## 项目预览
-
-> 因为git压缩了帧率，看起来不够流畅。可点击这里下载预览视频观看：[预览视频。](https://raw.githubusercontent.com/YuiGod/py-doc-qa-deepseek-server/refs/heads/main/images/preview.mp4)
-
-![chat_preview](./images/chat_preview.png)  
-![preview_1](./images/preview_1.gif)  
-![preview_2](./images/preview_2.gif)  
-![preview_3](./images/preview_3.gif)  
-
-## 项目功能
-
-1.  文档管理API，文档上传到指定位置，并在 SQLite 记录信息。
-2.  聊天对话历史管理API，用 SQLite 保存记录。
-3.  聊天采用流式响应。
-4.  实现基本的 RAG 功能。
-
-> 基本框架已经搭建完成。后续会系统学习 LangGraph ，添加更多新的功能。
-
 
 ## src 目录树
 
