@@ -12,20 +12,18 @@ class ChatAPIPipeline:
         HOST: str
         PORT: str
         DATASET_ID: Optional[str] = None  # Optional dataset ID for file uploads
-        CHAT_ID: Optional[str] = None     # Optional existing chat ID
 
     def __init__(self):
-        self.session_id = None
-        self.debug = True
-        self.sessionKV = {}
+        self.chat_id=None
+        self.debug=True
+        self.sessionKV={}
         self.client = None
         self.valves = self.Valves(
             **{
-                "API_KEY": os.getenv("RAGFLOW_API_KEY", ""),
+                "API_KEY": os.getenv("RAGFLOW_API_KEY", "ragflow-ZkMWI3NjcwNjM3MzExZjA4ZWNiMDI0Mm"),
                 "HOST": os.getenv("RAGFLOW_HOST", "http://localhost"),
                 "PORT": os.getenv("RAGFLOW_PORT", "8000"),
                 # "DATASET_ID": "",  # Optional: Set default dataset ID
-                # "CHAT_ID": ""       # Optional: Set default chat ID
             }
         )
         self._initialize_client()
@@ -42,70 +40,57 @@ class ChatAPIPipeline:
                 print("RAGflow client not initialized - missing configuration")
 
     async def on_startup(self):
-        """Initialize resources on server startup"""
-        # Create default chat if CHAT_ID not provided
-        if not self.valves.CHAT_ID and self.client:
-            try:
-                chat_name = "Default Chat Pipeline"
-                response = self.client.create_chat(name=chat_name)
-                self.valves.CHAT_ID = response["data"]["id"]
-                if self.debug:
-                    print(f"Created new chat with ID: {self.valves.CHAT_ID}")
-            except RAGflowAPIError as e:
-                print(f"Error creating default chat: {str(e)}")
+        pass
 
     async def on_shutdown(self):
         """Clean up resources on server shutdown"""
         pass
 
     async def inlet(self, body: dict, user: Optional[dict] = None) -> dict:
-        """Process request before sending to API"""
+        # This function is called before the OpenAI API request is made. You can modify the form data before it is sent to the OpenAI API.
+        print(f"inlet: {__name__}")
         if self.debug:
-            chat_id = body.get('metadata', {}).get('chat_id')
-            print(f"inlet: chat_id={chat_id}, user={user}")
-
-        # Handle file uploads if present
-        if 'files' in body and self.client and self.valves.DATASET_ID:
-            uploaded_files = await self._handle_file_upload(body['files'])
-            body['uploaded_files'] = uploaded_files
-
+            chat_id=body['metadata']['chat_id']
+            print(f"inlet: {__name__} - chat_id:{chat_id}")
+            if self.sessionKV.get(chat_id):
+                self.chat_id=self.sessionKV.get(chat_id)
+                print(f"cache ragflow's chat_id is : {self.chat_id}")
+            else:
+                #创建session
+                session_url = f"{self.valves.HOST}:{self.valves.PORT}/api/v1/agents/{self.valves.AGENT_ID}/sessions"
+                session_headers = {
+                    'content-Type': 'application/json',
+                    'Authorization': 'Bearer '+self.valves.API_KEY
+                }
+                session_data={}
+                session_response = requests.post(session_url, headers=session_headers, json=session_data)
+                json_res=json.loads(session_response.text)
+                self.session_id=json_res['data']['id']
+                self.sessionKV[chat_id]=self.session_id
+                print(f"new ragflow's session_id is : {json_res['data']['id']}")
+            try:
+                # 创建chat
+                chat_url = f"{self.valves.HOST}:{self.valves.PORT}/api/v1/chats"
+                chat_headers = {
+                    'content-Type': 'application/json',
+                    'Authorization': 'Bearer '+self.valves.API_KEY
+                }
+                chat_data={'name': 'Chat Pipeline', 'dataset_ids': []}
+                chat_response = requests.post(chat_url, headers=chat_headers, json=chat_data)
+                chat_response.raise_for_status()
+                json_res=json.loads(chat_response.text)
+                self.chat_id=json_res['data']['id']
+                self.sessionKV[chat_id]=self.chat_id 
+                print(f"new ragflow's chat_id is : {self.chat_id}")
+            except requests.exceptions.RequestException as e:
+                print(f"Error creating chat: {str(e)}")
+                self.chat_id = None
+            print(f"inlet: {__name__} - user:")
+            print(user)
+        # if 'files' in body and self.client and self.valves.DATASET_ID:
+        #     uploaded_files = await self._handle_file_upload(body['files'])
+        #     body['uploaded_files'] = uploaded_files
         return body
-
-    async def _handle_file_upload(self, files: List[dict]) -> List[dict]:
-        """Handle file uploads to specified dataset"""
-        if not files or not self.valves.DATASET_ID:
-            return []
-
-        uploaded_files = []
-        try:
-            # Extract file paths from request
-            file_paths = [file['path'] for file in files if 'path' in file]
-            if not file_paths:
-                return []
-
-            # Upload files using RAGflow client
-            response = self.client.upload_documents(
-                dataset_id=self.valves.DATASET_ID,
-                file_paths=file_paths
-            )
-
-            # Parse and return upload results
-            for doc in response.get('data', []):
-                uploaded_files.append({
-                    'id': doc.get('id'),
-                    'name': doc.get('name'),
-                    'status': doc.get('status')
-                })
-
-            if self.debug:
-                print(f"Uploaded {len(uploaded_files)} files to dataset {self.valves.DATASET_ID}")
-
-        except RAGflowAPIError as e:
-            print(f"File upload error: {str(e)}")
-        except Exception as e:
-            print(f"Unexpected error during file upload: {str(e)}")
-
-        return uploaded_files
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         """Process response after receiving from API"""
@@ -117,40 +102,47 @@ class ChatAPIPipeline:
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
         """Process user message through chat pipeline"""
-        if not self.client or not self.valves.CHAT_ID:
+        if not self.client or not self.chat_id:
             error_msg = "Chat pipeline not properly initialized - missing client or chat ID"
             if self.debug:
                 print(error_msg)
             return error_msg
 
         try:
-            # Get or create session
-            session_id = self._get_or_create_session()
-
-            # Send message to chat
-            response = self.client.converse_with_chat(
-                chat_id=self.valves.CHAT_ID,
-                question=user_message,
-                stream=True,
-                session_id=session_id
-            )
-
-            # Handle streaming response
-            if response and hasattr(response, 'iter_lines'):
-                for line in response.iter_lines():
+            question_url = f"{self.valves.HOST}:{self.valves.PORT}/api/v1/chats/{self.chat_id}/completions"
+            question_headers = {
+                'content-Type': 'application/json',
+                'Authorization': 'Bearer '+self.valves.API_KEY
+            }
+            question_data={'question': user_message, 'stream': True, 'session_id': self.session_id, 'lang': 'Chinese'}
+            question_response = requests.post(question_url, headers=question_headers, stream=True, json=question_data)
+            if question_response.status_code == 200:
+                step=0
+                for line in question_response.iter_lines():
                     if line:
                         try:
-                            # Parse and yield response chunks
                             json_data = json.loads(line.decode('utf-8')[5:])
-                            if 'data' in json_data and 'answer' in json_data['data']:
-                                yield json_data['data']['answer']
+                            if 'data' in json_data and json_data['data'] is not True and 'answer' in json_data['data'] and '* is running...' not in json_data['data']['answer']:
+                                if 'chunks' in json_data['data']['reference']:
+                                    referenceStr="\n\n### references\n\n"
+                                    filesList=[]
+                                    for chunk in json_data['data']['reference']['chunks']:
+                                        if chunk['document_id'] not in filesList:
+                                            filename = chunk['document_name']
+                                            parts = filename.split('.')
+                                            last_part = parts[-1].strip() if parts else ''
+                                            ext= last_part.lower() if last_part else ''
+                                            referenceStr+=f"\n\n - [{chunk['document_name']}]({self.valves.HOST}:{self.valves.PORT}/document/{chunk['document_id']}?ext={ext}&prefix=document)"
+                                            filesList.append(chunk['document_id'])
+                                    yield referenceStr
+                                else:
+                                    yield json_data['data']['answer'][step:]
+                                    step=len(json_data['data']['answer'])
                         except json.JSONDecodeError:
-                            if self.debug:
-                                print(f"Failed to parse response line: {line}")
+                            print(f"Failed to parse JSON: {line}")
             else:
-                # Return non-streaming response
-                answer = response.get('data', {}).get('answer', '')
-                return answer
+                yield f"Request failed with status code: {question_response.status_code}"
+            return
 
         except RAGflowAPIError as e:
             error_msg = f"Chat API error: {str(e)}"
@@ -162,43 +154,3 @@ class ChatAPIPipeline:
             if self.debug:
                 print(error_msg)
             return error_msg
-
-    def _get_or_create_session(self) -> Optional[str]:
-        """Get existing session or create new one"""
-        if self.session_id:
-            return self.session_id
-
-        if not self.client or not self.valves.CHAT_ID:
-            return None
-
-        try:
-            session_name = f"Pipeline Session {hash(self.sessionKV)}"
-            response = self.client.create_session(
-                chat_id=self.valves.CHAT_ID,
-                name=session_name
-            )
-            self.session_id = response["data"]["id"]
-            if self.debug:
-                print(f"Created new session with ID: {self.session_id}")
-            return self.session_id
-        except RAGflowAPIError as e:
-            print(f"Error creating session: {str(e)}")
-            return None
-
-    def upload_file(self, file_paths: List[str], dataset_id: Optional[str] = None) -> dict:
-        """Explicit file upload method"""
-        if not self.client:
-            return {"status": "error", "message": "RAGflow client not initialized"}
-
-        target_dataset_id = dataset_id or self.valves.DATASET_ID
-        if not target_dataset_id:
-            return {"status": "error", "message": "No dataset ID specified"}
-
-        try:
-            response = self.client.upload_documents(
-                dataset_id=target_dataset_id,
-                file_paths=file_paths
-            )
-            return {"status": "success", "data": response["data"]}
-        except RAGflowAPIError as e:
-            return {"status": "error", "message": str(e)}
