@@ -23,7 +23,7 @@ class Pipeline:
             **{
                 "API_KEY": "ragflow-ZkMWI3NjcwNjM3MzExZjA4ZWNiMDI0Mm",
                 "AGENT_ID": "34aba80461ed11f08d450242ac120006",
-                "HOST":"http://localhost",
+                "HOST":"http://host.docker.internal",
                 "PORT":"8000"
             }
         )
@@ -96,6 +96,7 @@ class Pipeline:
                     try:
                         # Remove 'data: ' prefix and parse JSON
                         json_data = json.loads(line.decode('utf-8')[5:])
+                        print(json_data)
                         # Extract and yield only the 'text' field from the nested 'data' object
                         # pring reference
                         if 'data' in json_data and json_data['data'] is not True and 'answer' in json_data['data'] and '* is running...' not in json_data['data']['answer'] :
