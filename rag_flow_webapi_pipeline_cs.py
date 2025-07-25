@@ -87,6 +87,7 @@ class Pipeline:
                        'stream':True,
                        'session_id':self.session_id,
                        'lang':'Chinese'}
+        print(f"question_data is :{question_data}")
         question_response = requests.post(question_url, headers=question_headers,stream=True, json=question_data)
         if question_response.status_code == 200:
             # Process and yield each chunk from the response
@@ -96,7 +97,7 @@ class Pipeline:
                     try:
                         # Remove 'data: ' prefix and parse JSON
                         json_data = json.loads(line.decode('utf-8')[5:])
-                        print(json_data)
+                        print(f"json_data is :{json_data}")
                         # Extract and yield only the 'text' field from the nested 'data' object
                         # pring reference
                         if 'data' in json_data and json_data['data'] is not True and 'answer' in json_data['data'] and '* is running...' not in json_data['data']['answer'] :

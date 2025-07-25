@@ -56,9 +56,11 @@ class Pipeline:
                 self.session_id=json_res['data']['id']
                 self.sessionKV[chat_id]=self.session_id
                 print(f"new ragflow's session_id is : {json_res['data']['id']}")
-            #print(f"inlet: {__name__} - body:{body}")
+            print(f"inlet: {__name__} - body:{body}")
             print(f"inlet: {__name__} - user:")
             print(user)
+            # 调试session_id赋值
+            print(f"inlet: chat_id={chat_id}, sessionKV={self.sessionKV}, assigned_session_id={self.session_id}")
         return body
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
@@ -67,14 +69,16 @@ class Pipeline:
         if self.debug:
             print(f"outlet: {__name__} - body:")
             #print(body)
-            print(f"outlet chat_id: {body['chat_id']}")
-            print(f"outlet session_id: {body['session_id']}")
+            print(f"outlet: chat_id: {body['chat_id']}")
+            print(f"outlet: session_id: {body['session_id']}")
             print(f"outlet: {__name__} - user:")
             print(user)
         return body
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
+        # 调试session_id在pipe方法开始时的值
+        print(f"pipe: session_id at start: {self.session_id}")
         # This is where you can add your custom RAG pipeline.
         # Typically, you would retrieve relevant information from your knowledge base and synthesize it to generate a response.
         # print(messages)
@@ -87,6 +91,7 @@ class Pipeline:
                        'stream':True,
                        'session_id':self.session_id,
                        'lang':'Chinese'}
+        print(f"pipe: session_id is :{self.session_id}")
         question_response = requests.post(question_url, headers=question_headers,stream=True, json=question_data)
         if question_response.status_code == 200:
             # Process and yield each chunk from the response
@@ -96,6 +101,9 @@ class Pipeline:
                     try:
                         # Remove 'data: ' prefix and parse JSON
                         json_data = json.loads(line.decode('utf-8')[5:])
+                        print(f"pipe: json_data is :{json_data}")
+                        self.session_id = json_data.get('data', {}).get('session_id')
+                        print(f"pipe: session_id2 is {self.session_id}")
                         # Extract and yield only the 'text' field from the nested 'data' object
                         # pring reference
                         if 'data' in json_data and json_data['data'] is not True and 'answer' in json_data['data'] and '* is running...' not in json_data['data']['answer'] :
